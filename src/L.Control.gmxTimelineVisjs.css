@@ -1,0 +1,36 @@
+html, body, #map {
+	height: 100%;
+	width: 100%;
+	margin: 0px;
+}
+.gmxTimelineVisjs {
+    bottom: 0px;
+    /* height: 163px; */
+    position: relative;
+	width: 100%;
+    margin-right: 0px !important;
+	margin-left: 0px !important;
+	margin-bottom: 30px !important;
+}
+
+.gmxTimelineVisjs .leftSide {
+    background-color: white;
+    width: 90%;
+    position: absolute;
+    right: 32px;
+    bottom: 0px;
+}
+
+.gmxTimelineVisjs .rightSide {
+    position: absolute;
+    right: 0px;
+    bottom: 0px;
+}
+
+.gmxTimelineVisjs .rightSide .leaflet-gmx-iconSvg {
+    margin-left: 0px;
+    margin-top: 30px;
+}
+.gmx-hidden {
+	display: none;
+}

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>gmxTimelineVisjs Example</title>
+	<meta charset="utf-8" />
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="stylesheet" href="http://kosmosnimki.ru/lib/geomixer/geomixer.css" />
+    <script src="http://kosmosnimki.ru/lib/geomixer/geomixer-src.js"></script>
+
+    <script src="external/moment-with-locales.min.js"></script>
+    <link rel="stylesheet" href="external/vis.css" />
+	<script src="external/vis.js"></script>
+
+    <link rel="stylesheet" href="src/L.Control.gmxTimelineVisjs.css" />
+	<script src="src/L.Control.gmxTimelineVisjs.js"></script>
+
+    <style>
+    </style>
+</head>
+<body>
+	<div id="map"></div>
+
+	<script>
+		var map = new L.Map('map', {
+			layers: [],
+			center: new L.LatLng(65, 39),
+			attributionControl: false,
+			zoomControl: false,
+			zoom: 8
+		});
+
+        var blm = map.gmxBaseLayersManager;
+        blm.initDefaults().then(function() {
+            var baseLayers = ['OSM'],
+                currentID = baseLayers[0];
+            blm.setActiveIDs(baseLayers).setCurrentID(currentID);
+        });
+        L.control.gmxLayers(blm).addTo(map)
+
+        var controlsManager = map.gmxControlsManager;
+        controlsManager
+			.init(
+				{
+					//gmxDrawing: {items: ['Polyline', 'Point', 'Polygon']}
+					//gmxLocation: {scaleFormat: 'text'}
+					//gmxHide: {isActive: false}
+					//gmxLogo: null
+				}
+			);
+
+		var ns = {gmxLayers: {}},
+			mapID = '24A629C7563742B49BBCC01D7D27B8DB',
+			// filter = function (it) { return it.properties[6] < 30; },
+			dateInterval = [new Date('2016-05-01'), new Date('2016-06-31')],
+			timelineControl = null,
+			dataSources = [
+				{layerID: 'AF64ECA6B32F437CB6AC72B5E6F85B97', mapID: mapID, content: 'Снимки', dateInterval: dateInterval},	// RC_Sentinel-1_GRD
+				{layerID: '0CF30127344044DBA775095D0E857DC7', mapID: mapID, content: 'АИС', dateInterval: dateInterval}		// AISWFSLastPosition
+			];
+        L.gmx.loadLayers(dataSources).then(function() {
+			// var layers = {};
+			for(var i = 0, len = arguments.length; i < len; i++) {
+				var gmxLayer = arguments[i],
+					itData = dataSources[i],
+					props = gmxLayer.getGmxProperties(),
+					zeroDate = new Date(props.ZeroDate.split('.').reverse().join('-'));
+
+				itData.title = props.title;
+				itData.temporalColumnName = props.TemporalColumnName;
+				itData.dateBegin = new Date(props.DateBegin.split('.').reverse().join('-'));
+				itData.dateEnd = new Date(props.DateEnd.split('.').reverse().join('-'));
+				if (itData.filter) {
+					gmxLayer.setFilter(filter);
+				}
+				gmxLayer.setDateInterval(zeroDate, zeroDate);
+
+				gmxLayer.addTo(map);
+				gmxLayer.setZIndex(i + 1);
+				ns.gmxLayers[props.name] = gmxLayer;
+// console.log('loadLayers ____', i, props, dataSources[i]);
+			
+				
+			}
+			map.addControl(L.control.gmxTimelineVisjs({
+				dateInterval: dateInterval,
+				dataSources: dataSources
+			 })
+				.on('click', function (ev) {
+					var selected = ev.selected,
+						attrHash = {};
+
+					for(var layerID in selected) {
+							gmxLayer = ns.gmxLayers[layerID],
+							props = gmxLayer.getGmxProperties(),
+							tIndex = gmxLayer.getTileAttributeIndexes()[props.TemporalColumnName];
+						selected[layerID].forEach(function (it) {
+							var time = it.start,
+								y = time.getFullYear(), m = time.getMonth(), d = time.getDate(),
+								d1 = new Date(y, m, d),
+								d2 = new Date(y, m, d + 1),
+								attr = attrHash[layerID] || {dateInterval: [d1, d1], filters: []},
+								filters = attr.filters,
+								dateInterval = attr.dateInterval;
+								// dateInterval = dateIntervals[layerID] || [new Date(1980, 0, 1), new Date(2980, 0, 1)];
+							// dateInterval[0] = new Date(Math.max(d1, dateInterval[0]));
+							dateInterval[0] = Math.min(d1, dateInterval[0]);
+							dateInterval[1] = Math.max(d1, dateInterval[1]);
+							attr.dateInterval = dateInterval;
+							(function () {
+								var dt = [d1, d2];
+									index = tIndex;
+								var id = layerID;
+								filters.push(function (pt) {
+									var zn = 1000 * pt.properties[index];
+//console.log('filters ____', id, dt, new Date(zn));
+									return zn >= dt[0] && zn < dt[1];
+								});
+							})();
+							attr.filters = filters;
+							attrHash[layerID] = attr;
+						});
+					}
+					for(var layerID in ns.gmxLayers) {
+						var dateInterval = [0, 0];
+						if (attrHash[layerID]) {
+							(function () {
+								var filters = attrHash[layerID].filters;
+								var gmxLayer = ns.gmxLayers[layerID];
+								gmxLayer.setFilter(function (pt) {
+									for(var i = 0, len = filters.length; i < len; i++) {
+										if (filters[i].call(this, pt)) {
+											return true;
+										}
+									}
+									return false;
+								});
+							})();
+							dateInterval = attrHash[layerID].dateInterval;
+						}
+						d1 = new Date(dateInterval[0]),
+						d2 = new Date(dateInterval[1] + 1000*60*60*24);
+						ns.gmxLayers[layerID].setDateInterval(d1, d2);
+//console.log('setDateInterval ____', layerID, d1, d2)
+						
+					}
+				})
+			);
+		});
+	</script>
+</body>
+</html>
