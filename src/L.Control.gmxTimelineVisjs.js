@@ -27,49 +27,8 @@ L.Control.GmxTimelineVisjs = L.Control.extend({
         }
         map.off('moveend', this._moveend, this);
         map.fire('controlremove', this);
-        // var corners = map._controlCorners;
-        // ['bottomleft', 'bottomright', 'right', 'left'].map(function (it) {
-            // if (corners[it]) {
-                // L.DomUtil.removeClass(corners[it], 'gmx-bottom-shift');
-            // }
-        // });
     },
-/*
-    _getLayersPromise: function () {
-		if (!this._layersPropsPromise) {
-			var _this = this;
-			var arr = this.options.dataSources.map(function (it) {
-				return {Layer: it.layerID};
-			});
-			this._layersPropsPromise = fetch(this.options.hostPrefix + 'Layer/GetLayerJson.ashx?WrapStyle=None&Layers=' + JSON.stringify(arr))
-				.then(function(response) { return response.json(); })
-				.then(function(json) {
-console.log('_ssss_', json)
-					if (json.Status === 'ok' && json.Result.values.length) {
-						json.Result.values.forEach(function (it, i) {
-							var props = it.properties;
-							_this._layersProps[props.name] = {
-								temporalColumnName: props.TemporalColumnName
-							};
-// select count(*) as content, [acqdate] as start from [AFB4D363768E4C5FAC71C9B0C6F7B2F4] WHERE Intersects([geomixergeojson], buffer(GeometryFromGeoJson('{"type":"GeometryCollection","geometries":[{"type":"Polygon","coordinates":[[[37.9248046875,55.547280698640805],[37.9248046875,56.12106052504407],[37.254638671875,56.12106052504407],[37.254638671875,55.547280698640805],[37.9248046875,55.547280698640805]]]}]}', 4326), 0.001)) AND [cloudness] < 30 AND [acqdate] BETWEEN '2016-01-01' AND '2016-12-31' GROUP BY [acqdate]
-						});
-						// resolve(_this._layersProps);
-					console.log('items: ', data.length, ' objects: ', counts);
-					}
-				});
-	  // this._layersPropsPromise = new Promise(function (resolve, reject) {
-			// var // hostPrefix + 'VectorLayer/QuerySelect?sql=select count(*) from [61F54CF35EC44536B527A2168BE6F5A0]'
-			// Layers - JSON массив с параметрами [{“Layer”:”id layer”,”dateBegin”:xxx,”dateEnd”:xxxx}]
-// console.log('__', it.min)
-		}
-			
-			// 
-		// }
-		// var // http://maps.kosmosnimki.ru/VectorLayer/QuerySelect?sql=select count(*) from [61F54CF35EC44536B527A2168BE6F5A0]
-		// hostPrefix + 'VectorLayer/QuerySelect?sql=select count(*) from [61F54CF35EC44536B527A2168BE6F5A0]'
-		return this._layersPropsPromise;
-    },
-*/
+
     _moveend: function (ev) {
 		if (this._sidebarOn) {
 			this._bboxUpdate(ev);
@@ -213,6 +172,7 @@ console.log('_ssss_', json)
 
     _initTimeline: function () {
 		var options = {
+				start: this.options.dateInterval[0],
 				stack: false,
 				multiselect: true,
 				zoomMin: 1000 * 60 * 60 * 24 * 30,
