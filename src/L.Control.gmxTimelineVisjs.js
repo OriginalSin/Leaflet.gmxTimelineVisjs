@@ -16,9 +16,18 @@ L.Control.GmxTimelineVisjs = L.Control.extend({
 
 	initialize: function (options) {
 		L.Control.prototype.initialize.call(this, options);
-		this._defaults = {
-			zeroDate: new Date(1980, 0, 1)
+		var state = {
+			selectedItems: {},
+			day: 1000*60*60*24,
+			zeroDate: new Date(1980, 0, 1).getTime(),
+			maxDate: new Date(2980, 0, 1).getTime()
 		};
+		this.options.dataSources.forEach(function (it) {
+			if (it.layerID) {
+				state[it.layerID] = it;
+			}
+		});
+		this._state = state;
 	},
 
     onRemove: function (map) {
@@ -56,121 +65,73 @@ L.Control.GmxTimelineVisjs = L.Control.extend({
 		// bbox += ',min(STEnvelopeMinY([gmx_geometry])) as ymin';
 		// bbox += ',max(STEnvelopeMaxY([gmx_geometry])) as ymax';
 
-		this._items.clear();
+		// this._items.clear();
 		var count = 0;
 		this.options.dataSources.forEach(function (it) {
 			if (it.layerID && it.temporalColumnName) {
-				// var src = prefix + ', [' + it.temporalColumnName + '] as start ' + bbox + ' from [' + it.layerID + '] WHERE ' + geoIntersects;
-				var grp = 'CAST([' + it.temporalColumnName + '] as date) as start';
-				var src = prefix + ', ' + grp + ' from [' + it.layerID + '] WHERE ' + geoIntersects;
+				var grp = 'CAST([' + it.temporalColumnName + '] as date) as start',
+					src = prefix + ', ' + grp + ' from [' + it.layerID + '] WHERE ',
+					whereArr = [
+						geoIntersects,
+						'[' + it.temporalColumnName + '] BETWEEN ' + between,
+						
+					];
 				if (it.clouds) {
-					src += ' AND [' + it.clouds.key + '] < ' + it.clouds.lt;
+					whereArr.push('[' + it.clouds.key + '] < ' + it.clouds.lt);
 				}
-				src += ' AND [' + it.temporalColumnName + '] BETWEEN ' + between;
+				if (it.isGeometryIdx === false) {
+					whereArr.push(whereArr.shift());
+				}
+				src += whereArr.join(' AND ');
 				src += ' GROUP BY ' + grp;
 				arr.push(fetch(src).then(function (response) { return response.json(); }));
 				ids.push(it.layerID)
-				/*
-				(function() {
-					var layerID = it.layerID;
-					fetch(src)
-						.then(function (response) { return response.json(); })
-						.then(function (json) {
-							if (json.Status === 'ok' && json.Result.values) {
-								var selected = [],
-									selectedItems = {};
-
-								var data = json.Result.values.map(function (it, i) {
-									var start = new Date(it[1] * 1000),
-										tm = start.toUTCString();
-									var item = {
-										id: count,
-										type: 'point',
-										// title: it[0].toString(),
-										// content: it[0].toString(),
-										group: layerID,
-										tm: tm,
-										// bbox: [[it[4], it[2]], [it[5], it[3]]],
-										start: start
-									};
-									if (_this._selectedItems[tm]) {
-										selected.push(count);
-										selectedItems[tm] = item;
-									}
-									count++;
-									return item;
-								});
-								_this._items.add(data);
-							}
-						});
-				})();*/
 			}
 		});
 		
- // console.log('arr', arr)
 		Promise.all(arr).then(function (results) {
 			var count = 0,
+				selected = [],
 				res = [];
-				// jsonArr = [];
 			results.map(function (json, nm) {
-				// var json = promise.json();
-					// promise.then(function (json) {
-						if (json.Status === 'ok' && json.Result.values) {
- // console.log('json', json.Result.values.length)
-							// var pLength = res.length,
-								// nLength = json.Result.values.length + pLength,
-							var layerID = ids[nm],
-								selected = [],
-								selectedItems = {};
+				if (json.Status === 'ok' && json.Result.values) {
+					var layerID = ids[nm],
+						selectedItems = _this._state.selectedItems[layerID] || {};
 
-							res.length += json.Result.values.length;
-							json.Result.values.forEach(function (it, i) {
-								var start = new Date(it[1] * 1000),
-									tm = start.toUTCString();
-								var item = {
-									id: count,
-									type: 'point',
-									// title: it[0].toString(),
-									// content: it[0].toString(),
-									group: layerID,
-									tm: tm,
-									// bbox: [[it[4], it[2]], [it[5], it[3]]],
-									start: start
-								};
-								if (_this._selectedItems[tm]) {
-									selected.push(count);
-									selectedItems[tm] = item;
-								}
-								res[count] = item;
-								count++;
-								return item;
-							});
-							// _this._items = new vis.DataSet(data);
-							// _this._items.clear();
-							// _this._items.add(data);
-							// var dateInterval = _this._getDateInterval();
-							// _this._timeline.setWindow(dateInterval[0], dateInterval[1]);
-							// _this._timeline.setSelection(selected);
-							// _this._selectedItems = selectedItems;
-
-							// _this._reDraw();
-							// var h = _this._leftSide.style.height;
-							// _this._container.style.height = h + 'px';
+					res.length += json.Result.values.length;
+					json.Result.values.forEach(function (it, i) {
+						var start = new Date(it[1] * 1000),
+							tm = start.toUTCString();
+						var item = {
+							id: count,
+							type: 'point',
+							// title: it[0].toString(),
+							// content: it[0].toString(),
+							group: layerID,
+							tm: tm,
+							// bbox: [[it[4], it[2]], [it[5], it[3]]],
+							start: start
+						};
+						if (selectedItems[tm]) {
+							selected.push(count);
 						}
-					// });
+						res[count] = item;
+						count++;
+						return item;
+					});
+				}
 			});
-			_this._items.clear();
-			// _this._items = new vis.DataSet(data);
-			_this._items.add(res);
-			// var dateInterval = _this._getDateInterval();
-			// _this._timeline.setWindow(dateInterval[0], dateInterval[1]);
-			// _this._timeline.setSelection(selected);
-			// _this._selectedItems = selectedItems;
- // console.log('results', results)
+			if (!_this._timeline) {
+				_this._initTimeline(res);
+			} else {
+				_this._items.clear();
+				_this._items.add(res);
+			}
+			_this._timeline.setSelection(selected);
 		});
     },
 
-    _initTimeline: function () {
+    _initTimeline: function (data) {
 		var options = {
 				start: this.options.dateInterval[0],
 				stack: false,
@@ -215,22 +176,28 @@ L.Control.GmxTimelineVisjs = L.Control.extend({
 			this._timeline.destroy();
 		}
 		var _this = this;
-		this._selectedItems = {};
-		this._items = new vis.DataSet([]);
+		this._items = new vis.DataSet(data);
         this._timeline = new vis.Timeline(this._leftSide, this._items, groups, options);
 		this._timeline
 			.on('click', function (items) {
-				_this._selectedItems = {};
-				var item = null;
+				var state = _this._state,
+					out = {};
+				state.selectedItems = {};
 				_this._items.get(_this._timeline.getSelection()).forEach(function (it, i) {
-					item = it;
 					var layerID = it.group,
-						group = _this._selectedItems[layerID] || [];
-					group.push(it);
-					_this._selectedItems[layerID] = group;
+						group = out[layerID] || {filters: [], dateInterval: [state.maxDate, state.zeroDate]},
+						d1 = it.start.getTime(),
+						d2 = d1 + state.day,
+						hash = state.selectedItems[layerID] || {};
+						
+					hash[it.tm] = true;
+					state.selectedItems[layerID] = hash;
+					group.filters.push([d1, d2]);
+					group.dateInterval[0] = Math.min(d1, group.dateInterval[0]);
+					group.dateInterval[1] = Math.max(d2, group.dateInterval[1]);
+					out[layerID] = group;
 				});
-				
-				_this.fire('click', {selected: _this._selectedItems, originalEvent: items.event});
+				_this.fire('click', {selected: out, originalEvent: items.event});
 			})
 			.on('contextmenu', function (items, ev) {
 				console.log('contextmenu', items, ev)
@@ -238,11 +205,10 @@ L.Control.GmxTimelineVisjs = L.Control.extend({
     },
 
     _getDateInterval: function (flag) {
-		var dateInterval = this.options.dateInterval || [this._defaults.zeroDate, this._defaults.zeroDate],
+		var dateInterval = this.options.dateInterval || [this._state.zeroDate, this._state.zeroDate],
 			d1 = dateInterval[0],
 			d2 = dateInterval[1];
 		return dateInterval.map(function (it) {
-			// var date = Date(it.getFullYear(), it.getMonth(), it.getDay());
 			return flag ? it.toISOString() : it;
 		});
     },
@@ -273,7 +239,6 @@ L.Control.GmxTimelineVisjs = L.Control.extend({
 
         container._id = this.options.id;
         this._map = map;
-		this._initTimeline();
 
 		L.DomEvent.disableScrollPropagation(container);
         if (map.gmxControlsManager) {

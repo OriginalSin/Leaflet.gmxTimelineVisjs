@@ -50,14 +50,27 @@
 				}
 			);
 
-		var ns = {gmxLayers: {}},
+		var ns = {},
+			attrHash = {},
 			mapID = '24A629C7563742B49BBCC01D7D27B8DB',
-			// filter = function (it) { return it.properties[6] < 30; },
+			filter = function (it) {
+				var props = this.getGmxProperties(),
+					filters = ns[props.name].filters || [],
+					index = this.getTileAttributeIndexes()[props.TemporalColumnName],
+					zn = 1000 * it.properties[index];
+				for(var i = 0, len = filters.length; i < len; i++) {
+					var dt = filters[i];
+					if (zn >= dt[0] && zn < dt[1]) {
+						return true;
+					}
+				}
+				return false;
+			},
 			dateInterval = [new Date('2016-05-01'), new Date('2016-06-31')],
 			timelineControl = null,
 			dataSources = [
 				{layerID: 'AF64ECA6B32F437CB6AC72B5E6F85B97', mapID: mapID, content: 'Снимки', dateInterval: dateInterval},	// RC_Sentinel-1_GRD
-				{layerID: '0CF30127344044DBA775095D0E857DC7', mapID: mapID, content: 'АИС', dateInterval: dateInterval}		// AISWFSLastPosition
+				{layerID: '0CF30127344044DBA775095D0E857DC7', mapID: mapID, content: 'АИС', isGeometryIdx: true, dateInterval: dateInterval}		// AISWFSLastPosition
 			];
         L.gmx.loadLayers(dataSources).then(function() {
 			// var layers = {};
@@ -69,81 +82,33 @@
 
 				itData.title = props.title;
 				itData.temporalColumnName = props.TemporalColumnName;
+				itData.temporalColumnIndex = gmxLayer.getTileAttributeIndexes()[props.TemporalColumnName];
 				itData.dateBegin = new Date(props.DateBegin.split('.').reverse().join('-'));
 				itData.dateEnd = new Date(props.DateEnd.split('.').reverse().join('-'));
-				if (itData.filter) {
-					gmxLayer.setFilter(filter);
-				}
+				gmxLayer.setFilter(filter.bind(gmxLayer));
 				gmxLayer.setDateInterval(zeroDate, zeroDate);
 
 				gmxLayer.addTo(map);
 				gmxLayer.setZIndex(i + 1);
-				ns.gmxLayers[props.name] = gmxLayer;
-// console.log('loadLayers ____', i, props, dataSources[i]);
-			
-				
+				ns[props.name] = {gmxLayer: gmxLayer};
 			}
 			map.addControl(L.control.gmxTimelineVisjs({
 				dateInterval: dateInterval,
 				dataSources: dataSources
 			 })
 				.on('click', function (ev) {
-					var selected = ev.selected,
-						attrHash = {};
+					var selected = ev.selected;
+					for(var layerID in ns) {
+						var item = ns[layerID],
+							dateInterval = [0, 0];
 
-					for(var layerID in selected) {
-							gmxLayer = ns.gmxLayers[layerID],
-							props = gmxLayer.getGmxProperties(),
-							tIndex = gmxLayer.getTileAttributeIndexes()[props.TemporalColumnName];
-						selected[layerID].forEach(function (it) {
-							var time = it.start,
-								y = time.getFullYear(), m = time.getMonth(), d = time.getDate(),
-								d1 = new Date(y, m, d),
-								d2 = new Date(y, m, d + 1),
-								attr = attrHash[layerID] || {dateInterval: [d1, d1], filters: []},
-								filters = attr.filters,
-								dateInterval = attr.dateInterval;
-								// dateInterval = dateIntervals[layerID] || [new Date(1980, 0, 1), new Date(2980, 0, 1)];
-							// dateInterval[0] = new Date(Math.max(d1, dateInterval[0]));
-							dateInterval[0] = Math.min(d1, dateInterval[0]);
-							dateInterval[1] = Math.max(d1, dateInterval[1]);
-							attr.dateInterval = dateInterval;
-							(function () {
-								var dt = [d1, d2];
-									index = tIndex;
-								var id = layerID;
-								filters.push(function (pt) {
-									var zn = 1000 * pt.properties[index];
-//console.log('filters ____', id, dt, new Date(zn));
-									return zn >= dt[0] && zn < dt[1];
-								});
-							})();
-							attr.filters = filters;
-							attrHash[layerID] = attr;
-						});
-					}
-					for(var layerID in ns.gmxLayers) {
-						var dateInterval = [0, 0];
-						if (attrHash[layerID]) {
-							(function () {
-								var filters = attrHash[layerID].filters;
-								var gmxLayer = ns.gmxLayers[layerID];
-								gmxLayer.setFilter(function (pt) {
-									for(var i = 0, len = filters.length; i < len; i++) {
-										if (filters[i].call(this, pt)) {
-											return true;
-										}
-									}
-									return false;
-								});
-							})();
-							dateInterval = attrHash[layerID].dateInterval;
+						item.filters = [];
+						if (ev.selected[layerID]) {
+							var hash = ev.selected[layerID];
+							item.filters = hash.filters;
+							dateInterval = hash.dateInterval;
 						}
-						d1 = new Date(dateInterval[0]),
-						d2 = new Date(dateInterval[1] + 1000*60*60*24);
-						ns.gmxLayers[layerID].setDateInterval(d1, d2);
-//console.log('setDateInterval ____', layerID, d1, d2)
-						
+						item.gmxLayer.setDateInterval(new Date(dateInterval[0]), new Date(dateInterval[1]));
 					}
 				})
 			);
