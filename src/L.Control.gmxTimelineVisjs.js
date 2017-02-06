@@ -55,10 +55,12 @@ L.Control.GmxTimelineVisjs = L.Control.extend({
 
 		var arr = [],
 			ids = [],
+			state = this._state,
+			interval = this._getDateInterval(true),
 			_this = this,
 			geoIntersects = 'Intersects([geomixergeojson], buffer(GeometryFromGeoJson(\'{"type":"GeometryCollection","geometries":' + JSON.stringify(geometries) + '}\', 4326), 0.001))',
 			prefix = this.options.hostPrefix + 'VectorLayer/QuerySelect?WrapStyle=None&sql=select count(*) as content',
-			between = '\'' + this._getDateInterval(true).join('\' AND \'') + '\'';
+			between = '\'' + interval.join('\' AND \'') + '\'';
 			// ,
 			// bbox = ',min(STEnvelopeMinX([gmx_geometry])) as xmin';
 		// bbox += ',max(STEnvelopeMaxX([gmx_geometry])) as xmax';
@@ -95,32 +97,47 @@ L.Control.GmxTimelineVisjs = L.Control.extend({
 				res = [];
 			results.map(function (json, nm) {
 				if (json.Status === 'ok' && json.Result.values) {
-					var layerID = ids[nm],
-						selectedItems = _this._state.selectedItems[layerID] || {};
+					var groupLen = json.Result.values.length;
 
-					res.length += json.Result.values.length;
-					json.Result.values.forEach(function (it, i) {
-						var start = new Date(it[1] * 1000),
-							tm = start.toUTCString();
-						var item = {
-							id: count,
-							type: 'point',
-							// title: it[0].toString(),
-							// content: it[0].toString(),
-							group: layerID,
-							tm: tm,
-							// bbox: [[it[4], it[2]], [it[5], it[3]]],
-							start: start
-						};
-						if (selectedItems[tm]) {
-							selected.push(count);
-						}
-						res[count] = item;
+					if (groupLen) {
+						var layerID = ids[nm],
+							groupInterval = [state.maxDate, state.zeroDate],
+							selectedItems = state.selectedItems[layerID] || {};
+						res.length += groupLen;
+						json.Result.values.forEach(function (it, i) {
+							var start = new Date(it[1] * 1000),
+								tm = start.toUTCString();
+							var item = {
+								id: count,
+								type: 'point',
+								// title: it[0].toString(),
+								// content: it[0].toString(),
+								group: layerID,
+								tm: tm,
+								// bbox: [[it[4], it[2]], [it[5], it[3]]],
+								start: start
+							};
+							if (selectedItems[tm]) {
+								selected.push(count);
+							}
+							res[count] = item;
+							count++;
+							groupInterval[0] = Math.min(start, groupInterval[0]);
+							groupInterval[1] = Math.max(start, groupInterval[1]);
+							// return item;
+						});
+						res.push(
+							{id: 'background_' + layerID, start: groupInterval[0], end: groupInterval[1], type: 'background', className: 'negative',group:layerID}
+						);
 						count++;
-						return item;
-					});
+					}
 				}
 			});
+			res.push(
+				{id: 'background_all', start: interval[0], end: interval[1], type: 'background', className: 'positive'}
+			);
+			count++;
+
 			if (!_this._timeline) {
 				_this._initTimeline(res);
 			} else {
@@ -133,9 +150,17 @@ L.Control.GmxTimelineVisjs = L.Control.extend({
 
     _initTimeline: function (data) {
 		var options = {
-				start: this.options.dateInterval[0],
+				// min: this.options.dateInterval[0],
+				// max: this.options.dateInterval[1],
+				// width: '90%',
 				stack: false,
+				// clickToUse: true,
+				// verticalScroll: true,
 				multiselect: true,
+				multiselectPerGroup: true,
+				orientation: 'top',
+				// rollingMode: true,
+				// rtl: true,
 				zoomMin: 1000 * 60 * 60 * 24 * 30,
 				// timeAxis: {scale: 'day'},
 				// type: 'point',
